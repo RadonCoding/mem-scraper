@@ -1,8 +1,10 @@
+![](https://user-images.githubusercontent.com/86915746/217377037-18e6be1a-6f1c-4713-ad73-6af56037fbb3.gif)
+
 ### Prerequisites
-1. Install [Visual Studio](https://visualstudio.microsoft.com/downloads) and enable Desktop Development with C++
+1. Install [Visual Studio](https://visualstudio.microsoft.com/downloads) and enable **Desktop Development with C++**
 
 ### Info
-This is a program that reads the process memory of an external process and tries to find sensitive strings on the heap and the stack.
+This project uses ANSI strings and C++ 20. It reads the process memory of an external process and tries to find sensitive strings on the heap and the stack.
 
 ### Contributing
 1. Fork it
