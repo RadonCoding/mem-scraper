@@ -1,10 +1,9 @@
 #include "mem-scraper.hpp"
 #include <iostream>
 #include <vector>
-#include <tlhelp32.h>
-#include <thread>
+#include <TlHelp32.h>
 #include <set>
-#include <fstream>
+#include <string>
 
 DWORD g_stack[MAX_STACK_SIZE];
 std::set<std::string> g_strings;
@@ -413,18 +412,26 @@ int main()
 	std::cout << "Enter filter (default = none): ";
 
 	std::string filter;
-	std::cin >> filter;
+	std::getline(std::cin, filter);
 
 	std::cout << "Enter process name: ";
 
 	std::string processName;
 	std::cin >> processName;
 
+	std::vector<DWORD> processes = getProcessesByName(processName);
+
+	if (processes.empty()) {
+		std::cout << "No process with that name was found!" << std::endl;
+		return EXIT_FAILURE;
+	}
+
 	while (true)
 	{
-		for (DWORD dwProcId : getProcessesByName(processName))
+		for (DWORD dwProcId : processes)
 		{
 			scanProcess(dwProcId, filter);
 		}
 	}
+	return EXIT_SUCCESS;
 }
