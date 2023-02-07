@@ -1,3 +1,5 @@
+![](https://user-images.githubusercontent.com/86915746/217377037-18e6be1a-6f1c-4713-ad73-6af56037fbb3.gif)
+
 ### Prerequisites
 1. Install [Visual Studio](https://visualstudio.microsoft.com/downloads) and enable **Desktop Development with C++**
 
