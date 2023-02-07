@@ -1,5 +1,5 @@
 ### Prerequisites
-1. Install [Visual Studio](https://visualstudio.microsoft.com/downloads) and enable Desktop Development with C++
+1. Install [Visual Studio](https://visualstudio.microsoft.com/downloads) and enable **Desktop Development with C++**
 
 ### Info
 This is a program that reads the process memory of an external process and tries to find sensitive strings on the heap and the stack.
