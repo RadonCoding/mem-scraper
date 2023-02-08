@@ -10,7 +10,7 @@ Options:
 -F --filter The regex strings have to match (default = none)
 -T --target The place to search strings from (1 = heap, 2 = stack, default = both)
 -D --delay Delay between scans in milliseconds (default = 1000)
-
+```
 
 ### Prerequisites
 1. Install [Visual Studio](https://visualstudio.microsoft.com/downloads) and enable **Desktop Development with C++**
