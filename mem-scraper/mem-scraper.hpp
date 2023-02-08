@@ -51,7 +51,7 @@ public:
 };
 
 std::vector<Argument> arguments = {
-	Argument("help", "-h", "--help", "Shows the usage of arguments"),
+	Argument("help", "-H", "--help", "Shows the usage of arguments"),
 	Argument("pid", "-P", "--pid", "The target process identifier"),
 	Argument("name", "-N", "--name", "The target process name"),
 	Argument("filter", "-F", "--filter", "The regex strings have to match (default = none)"),
