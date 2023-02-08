@@ -258,7 +258,6 @@ void findPointerStrings(HANDLE hProcess, DWORD dwStackSize, std::string filter)
 	for (DWORD i = 0; i < (dwStackSize / sizeof(DWORD)); i++)
 	{
 		// Potential data pointer
-
 		if (*dwCurrentStackValue >= 0x10000)
 		{
 			BYTE pStackValue[MAX_VALUE_SIZE];
