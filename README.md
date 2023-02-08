@@ -1,5 +1,17 @@
 ![](https://user-images.githubusercontent.com/86915746/217642381-40d52ae2-e706-46d0-ae8b-1f6de966ccd2.gif)
 
+Usage:
+```
+Usage: mem-scraper.exe [option(s)]
+Options:
+-H --help Shows the usage of arguments
+-P --pid The target process identifier
+-N --name The target process name
+-F --filter The regex strings have to match (default = none)
+-T --target The place to search strings from (1 = heap, 2 = stack, default = both)
+-D --delay Delay between scans in milliseconds (default = 1000)
+
+
 ### Prerequisites
 1. Install [Visual Studio](https://visualstudio.microsoft.com/downloads) and enable **Desktop Development with C++**
 
