@@ -5,7 +5,7 @@
 #include <set>
 #include <string>
 
-DWORD g_stack[MAX_STACK_SIZE];
+intptr_t g_stack[MAX_STACK_SIZE];
 std::set<std::string> g_strings;
 
 std::vector<DWORD> getProcessesByName(std::string name)
@@ -32,31 +32,6 @@ std::vector<DWORD> getProcessesByName(std::string name)
 	CloseHandle(hSnapshot);
 
 	return processes;
-}
-
-SYSTEM_PROCESS_INFORMATION *getProcessInfo()
-{
-	ULONG returnLength;
-
-	if (!NT_SUCCESS(NtQuerySystemInformation(SystemProcessInformation, nullptr, 0, &returnLength)))
-	{
-		void *buffer = malloc(returnLength);
-
-		if (!buffer)
-		{
-			return nullptr;
-		}
-
-		SYSTEM_PROCESS_INFORMATION *spi = (SYSTEM_PROCESS_INFORMATION *)buffer;
-
-		if (!NT_SUCCESS(NtQuerySystemInformation(SystemProcessInformation, spi, returnLength, NULL)))
-		{
-			free(buffer);
-			return nullptr;
-		}
-		return spi;
-	}
-	return nullptr;
 }
 
 bool checkAnsiString(BYTE *pStackValue, char *szString)
@@ -213,9 +188,10 @@ void processString(BYTE *pData, DWORD *pdwStringLength, std::string filter, Stri
 	}
 }
 
+// Finds values from the stack that are raw values
 void findLocalStrings(DWORD dwStackSize, std::string filter)
 {
-	DWORD *dwCurrentStackValue = g_stack;
+	intptr_t *dwCurrentStackValue = g_stack;
 
 	for (DWORD i = 0; i < dwStackSize; i++)
 	{
@@ -251,27 +227,25 @@ void findLocalStrings(DWORD dwStackSize, std::string filter)
 	}
 }
 
+// Finds values from the stack that are pointers and then reads the values
 void findPointerStrings(HANDLE hProcess, DWORD dwStackSize, std::string filter)
 {
-	DWORD *dwCurrentStackValue = g_stack;
+	intptr_t *dwCurrentStackValue = g_stack;
 
-	for (DWORD i = 0; i < (dwStackSize / sizeof(DWORD)); i++)
+	for (DWORD i = 0; i < (dwStackSize / sizeof(intptr_t)); i++)
 	{
-		// Potential data pointer
-		if (*dwCurrentStackValue >= 0x10000)
-		{
-			BYTE pStackValue[MAX_VALUE_SIZE];
-			ZeroMemory(&pStackValue, sizeof(pStackValue));
+		BYTE pStackValue[MAX_VALUE_SIZE];
+		ZeroMemory(&pStackValue, sizeof(pStackValue));
 
-			if (ReadProcessMemory(hProcess, dwCurrentStackValue, pStackValue, sizeof(pStackValue), 0))
-			{
-				processString(pStackValue, nullptr, filter, StringSource::STACK);
-			}
+		if (ReadProcessMemory(hProcess, (intptr_t *)*dwCurrentStackValue, pStackValue, sizeof(pStackValue), nullptr))
+		{
+			processString(pStackValue, nullptr, filter, StringSource::STACK);
 		}
 		dwCurrentStackValue++;
 	}
 }
 
+// Initializes the stack and calls the string capture functions
 void getStackStrings(HANDLE hProcess, HANDLE hThread, std::string filter)
 {
 	THREAD_BASIC_INFORMATION tbi;
@@ -308,6 +282,7 @@ void getStackStrings(HANDLE hProcess, HANDLE hThread, std::string filter)
 	findLocalStrings(dwStackSize, filter);
 }
 
+// Finds strings from the process heap
 void getHeapStrings(HANDLE hProcess, std::string filter)
 {
 	MEMORY_BASIC_INFORMATION mbi;
@@ -372,13 +347,35 @@ void scanProcess(DWORD dwProcId, std::string filter)
 
 	getHeapStrings(hProcess, filter);
 
-	SYSTEM_PROCESS_INFORMATION *spi = getProcessInfo();
+	SYSTEM_PROCESS_INFORMATION *spi = nullptr;
+
+	ULONG returnLength;
+
+	// Gets the system information for all processes in the system
+	if (!NT_SUCCESS(NtQuerySystemInformation(SystemProcessInformation, nullptr, 0, &returnLength)))
+	{
+		void *buffer = malloc(returnLength);
+
+		if (!buffer)
+		{
+			return;
+		}
+
+		spi = (SYSTEM_PROCESS_INFORMATION *)buffer;
+
+		if (!NT_SUCCESS(NtQuerySystemInformation(SystemProcessInformation, spi, returnLength, NULL)))
+		{
+			free(buffer);
+			return;
+		}
+	}
 
 	if (!spi)
 	{
 		return;
 	}
 
+	// Loop until the current entry is the target process
 	while ((intptr_t)spi->UniqueProcessId != dwProcId)
 	{
 		if (!spi->NextEntryOffset)
@@ -388,8 +385,10 @@ void scanProcess(DWORD dwProcId, std::string filter)
 		spi = (SYSTEM_PROCESS_INFORMATION *)((BYTE *)spi + spi->NextEntryOffset);
 	}
 
+	// The thread information is at the end of SYSTEN_PROCESS_INFORMATION
 	SYSTEM_THREAD_INFORMATION *sti = (SYSTEM_THREAD_INFORMATION *)((BYTE *)spi + sizeof(SYSTEM_PROCESS_INFORMATION));
 
+	// Loop all the threads and capture the strings from the stack
 	for (int i = 0; i < spi->NumberOfThreads; i++)
 	{
 		HANDLE hThread = nullptr;
@@ -398,6 +397,7 @@ void scanProcess(DWORD dwProcId, std::string filter)
 		ZeroMemory(&objectAttributes, sizeof(objectAttributes));
 		objectAttributes.Length = sizeof(objectAttributes);
 
+		// We use NtOpenThread so we can pass the CLIENT_ID which OpenThread can't do
 		DWORD dwStatus = NtOpenThread(&hThread, THREAD_QUERY_INFORMATION, &objectAttributes, &sti->ClientId);
 
 		if (dwStatus == 0)
