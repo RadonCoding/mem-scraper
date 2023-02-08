@@ -96,20 +96,23 @@ void processString(std::vector<char> data, size_t* pdwStringLength, std::string 
 
 	std::string szString(&data[0], dwNullPos);
 
+	szString.erase(0, szString.find_first_not_of(' '));
+
+	if (szString.empty()) {
+		return;
+	}
+
 	if (!isANSIString(szString) && !isWideString(szString))
 	{
 		return;
 	}
-
-	szString.erase(0, szString.find_first_not_of(' '));
 
 	if (pdwStringLength)
 	{
 		*pdwStringLength = szString.length();
 	}
 
-	if (szString.length() - 1 <= 5)
-	{
+	if (szString.length() - 1 <= 5) {
 		return;
 	}
 
@@ -237,7 +240,7 @@ void getHeapStrings(HANDLE hProcess, std::string filter)
 	// Loop all the memory pages and search contents for strings
 	for (char* address = nullptr; VirtualQueryEx(hProcess, address, &mbi, sizeof(mbi)); address += mbi.RegionSize)
 	{
-		if (mbi.State != MEM_COMMIT || (mbi.Protect & (PAGE_NOACCESS | PAGE_GUARD)) || mbi.Type != MEM_PRIVATE)
+		if (mbi.State != MEM_COMMIT || (mbi.Protect & (PAGE_NOACCESS | PAGE_GUARD | PAGE_EXECUTE)))
 		{
 			continue;
 		}
