@@ -127,7 +127,9 @@ void processString(std::vector<char> data, size_t* pdwStringLength, std::string 
 		return;
 	}
 
-	if (!filter.empty() && !std::regex_match(szString, std::regex(filter)))
+	std::smatch match;
+
+	if (!filter.empty() && !std::regex_search(szString, match, std::regex(filter)))
 	{
 		return;
 	}
@@ -291,6 +293,34 @@ void printLastError() {
 	std::cout << message << std::endl;
 }
 
+SYSTEM_PROCESS_INFORMATION* getSystemProcessInformation() {
+	ULONG returnLength;
+
+	// Gets the system information for all processes in the system
+	if (!NT_SUCCESS(NtQuerySystemInformation(SystemProcessInformation, nullptr, 0, &returnLength)))
+	{
+		void* buffer = malloc(returnLength);
+
+		if (!buffer)
+		{
+			std::cout << std::format("Failed to allocate {} bytes of memory!", returnLength) << std::endl;
+			return nullptr;
+		}
+
+		SYSTEM_PROCESS_INFORMATION* spi = (SYSTEM_PROCESS_INFORMATION*)buffer;
+
+		if (!NT_SUCCESS(NtQuerySystemInformation(SystemProcessInformation, spi, returnLength, nullptr)))
+		{
+			free(buffer);
+
+			// Stack overflow potential but i don't care
+			return getSystemProcessInformation();
+		}
+		return spi;
+	}
+	return nullptr;
+}
+
 bool scanProcess(DWORD dwProcId, std::string filter, int target)
 {
 	HANDLE hProcess = OpenProcess(PROCESS_VM_READ | PROCESS_QUERY_INFORMATION, false, dwProcId);
@@ -306,32 +336,8 @@ bool scanProcess(DWORD dwProcId, std::string filter, int target)
 
 	if (target == 0 || target == 2) {
 
-		SYSTEM_PROCESS_INFORMATION* spi = nullptr;
-
-		ULONG returnLength;
-
-		// Gets the system information for all processes in the system
-		if (!NT_SUCCESS(NtQuerySystemInformation(SystemProcessInformation, nullptr, 0, &returnLength)))
-		{
-			void* buffer = malloc(returnLength);
-
-			if (!buffer)
-			{
-				std::cout << std::format("Failed to allocate {} bytes of memory!", returnLength) << std::endl;
-				return false;
-			}
-
-			spi = (SYSTEM_PROCESS_INFORMATION*)buffer;
-
-			if (!NT_SUCCESS(NtQuerySystemInformation(SystemProcessInformation, spi, returnLength, NULL)))
-			{
-				printLastError();
-
-				free(buffer);
-				return false;
-			}
-		}
-
+		SYSTEM_PROCESS_INFORMATION* spi = getSystemProcessInformation();
+	
 		if (!spi)
 		{
 			return false;
