@@ -370,6 +370,8 @@ void scanProcess(DWORD dwProcId, std::string filter)
 {
 	HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, false, dwProcId);
 
+	getHeapStrings(hProcess, filter);
+
 	SYSTEM_PROCESS_INFORMATION *spi = getProcessInfo();
 
 	if (!spi)
@@ -401,8 +403,6 @@ void scanProcess(DWORD dwProcId, std::string filter)
 		if (dwStatus == 0)
 		{
 			getStackStrings(hProcess, hThread, filter);
-			getHeapStrings(hProcess, filter);
-
 			CloseHandle(hThread);
 		}
 		sti++;
