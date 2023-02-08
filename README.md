@@ -7,6 +7,7 @@
 This project uses ANSI strings and C++ 20. Make sure to also link ntdll.lib.
 
 ### Info
+This project is inspired by this [post](https://www.x86matthew.com/view_post?id=stack_scraper).
 It reads the process memory of an external process and tries to find sensitive strings on the heap and the stack.
 
 ### Contributing
