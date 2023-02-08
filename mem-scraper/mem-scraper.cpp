@@ -313,6 +313,7 @@ void getHeapStrings(HANDLE hProcess, std::string filter)
 {
 	MEMORY_BASIC_INFORMATION mbi;
 
+	// Loop all the memory pages and search contents for strings
 	for (BYTE *address = nullptr; VirtualQueryEx(hProcess, address, &mbi, sizeof(mbi)) == sizeof(mbi); address += mbi.RegionSize)
 	{
 		if (mbi.State != MEM_COMMIT)
