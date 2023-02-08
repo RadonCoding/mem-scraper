@@ -143,6 +143,7 @@ bool checkValidString(char *szString)
 		return false;
 	}
 
+	// These checks are to avoid "bloat"
 	if (dwLength < 8)
 	{
 		for (DWORD i = 0; i < dwLength; i++)
@@ -256,7 +257,9 @@ void findPointerStrings(HANDLE hProcess, DWORD dwStackSize, std::string filter)
 
 	for (DWORD i = 0; i < (dwStackSize / sizeof(DWORD)); i++)
 	{
-		if (*dwCurrentStackValue >= 0x10000)
+		// Potential data pointer
+
+		if (dwCurrentStackValue >= 0x10000)
 		{
 			BYTE pStackValue[MAX_VALUE_SIZE];
 			ZeroMemory(&pStackValue, sizeof(pStackValue));
@@ -421,7 +424,8 @@ int main()
 
 	std::vector<DWORD> processes = getProcessesByName(processName);
 
-	if (processes.empty()) {
+	if (processes.empty())
+	{
 		std::cout << "No process with that name was found!" << std::endl;
 		return EXIT_FAILURE;
 	}
