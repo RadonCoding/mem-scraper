@@ -280,32 +280,28 @@ void getHeapStrings(HANDLE hProcess, std::string filter)
 	}
 }
 
+// Gets the system information for all processes in the system
 SYSTEM_PROCESS_INFORMATION* getSystemProcessInformation() {
 	ULONG returnLength;
+	NtQuerySystemInformation(SystemProcessInformation, nullptr, 0, &returnLength)
+		
+	void* buffer = malloc(returnLength);
 
-	// Gets the system information for all processes in the system
-	if (!NT_SUCCESS(NtQuerySystemInformation(SystemProcessInformation, nullptr, 0, &returnLength)))
+	if (!buffer)
 	{
-		void* buffer = malloc(returnLength);
-
-		if (!buffer)
-		{
-			std::cout << std::format("Failed to allocate {} bytes of memory!", returnLength) << std::endl;
-			return nullptr;
-		}
-
-		SYSTEM_PROCESS_INFORMATION* spi = (SYSTEM_PROCESS_INFORMATION*)buffer;
-
-		if (!NT_SUCCESS(NtQuerySystemInformation(SystemProcessInformation, spi, returnLength, nullptr)))
-		{
-			free(buffer);
-
-			// Stack overflow potential but i don't care
-			return getSystemProcessInformation();
-		}
-		return spi;
+		std::cout << std::format("Failed to allocate {} bytes of memory!", returnLength) << std::endl;
+		return nullptr;
 	}
-	return nullptr;
+
+	SYSTEM_PROCESS_INFORMATION* spi = (SYSTEM_PROCESS_INFORMATION*)buffer;
+
+	if (!NT_SUCCESS(NtQuerySystemInformation(SystemProcessInformation, spi, returnLength, nullptr)))
+	{
+		free(buffer);
+		// Stack overflow potential but i don't care
+		return getSystemProcessInformation();
+	}
+	return spi;
 }
 
 bool scanProcess(DWORD dwProcId, std::string filter, int target)
