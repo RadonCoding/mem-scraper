@@ -280,22 +280,6 @@ void getHeapStrings(HANDLE hProcess, std::string filter)
 	}
 }
 
-void printLastError() {
-	DWORD error = GetLastError();
-
-	if (error == 0) {
-		return;
-	}
-
-	LPSTR buffer = nullptr;
-	size_t size = FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-		NULL, error, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)&buffer, 0, NULL);
-	std::string message(buffer, size);
-	LocalFree(buffer);
-
-	std::cout << message << std::endl;
-}
-
 SYSTEM_PROCESS_INFORMATION* getSystemProcessInformation() {
 	ULONG returnLength;
 
