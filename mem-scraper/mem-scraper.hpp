@@ -64,7 +64,7 @@ class InputParser
 public:
 	InputParser(int& argc, char** argv)
 	{
-		std::string path = std::string(argv[0]);
+		std::string path(argv[0]);
 		this->filename = path.substr(path.find_last_of("/\\") + 1);
 
 		for (int i = 1; i < argc; i++) {
