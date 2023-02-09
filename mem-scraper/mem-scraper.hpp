@@ -64,7 +64,8 @@ class InputParser
 public:
 	InputParser(int& argc, char** argv)
 	{
-		this->path = argv[0];
+		std::string path = std::string(argv[0]);
+		this->filename = path.substr(path.find_last_of("/\\") + 1);
 
 		for (int i = 1; i < argc; i++) {
 			this->tokens.push_back(std::string(argv[i]));
@@ -106,7 +107,7 @@ public:
 	}
 
 	void usage() {
-		std::cout << std::format("Usage: {} [option(s)]", this->path) << std::endl;
+		std::cout << std::format("Usage: {} [option(s)]", this->filename) << std::endl;
 		std::cout << "Options: " << std::endl;
 
 		for (Argument arg : arguments) {
@@ -115,7 +116,7 @@ public:
 	}
 
 private:
-	std::string path;
+	std::string filename;
 	std::vector<std::string> tokens;
 	std::map<std::string, std::string> parsed;
 };
