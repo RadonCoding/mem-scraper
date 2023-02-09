@@ -283,7 +283,7 @@ void getHeapStrings(HANDLE hProcess, std::string filter)
 // Gets the system information for all processes in the system
 SYSTEM_PROCESS_INFORMATION* getSystemProcessInformation() {
 	ULONG returnLength;
-	NtQuerySystemInformation(SystemProcessInformation, nullptr, 0, &returnLength)
+	NtQuerySystemInformation(SystemProcessInformation, nullptr, 0, &returnLength);
 		
 	void* buffer = malloc(returnLength);
 
