@@ -285,20 +285,11 @@ SYSTEM_PROCESS_INFORMATION* getSystemProcessInformation() {
 	ULONG returnLength;
 	NtQuerySystemInformation(SystemProcessInformation, nullptr, 0, &returnLength);
 		
-	void* buffer = malloc(returnLength);
-
-	if (!buffer)
-	{
-		std::cout << std::format("Failed to allocate {} bytes of memory!", returnLength) << std::endl;
-		return nullptr;
-	}
-
-	SYSTEM_PROCESS_INFORMATION* spi = (SYSTEM_PROCESS_INFORMATION*)buffer;
-
+	SYSTEM_PROCESS_INFORMATION* spi = (SYSTEM_PROCESS_INFORMATION*)malloc(returnLength);
+	
 	if (!NT_SUCCESS(NtQuerySystemInformation(SystemProcessInformation, spi, returnLength, nullptr)))
 	{
-		free(buffer);
-		// Stack overflow potential but i don't care
+		free(spi);
 		return getSystemProcessInformation();
 	}
 	return spi;
