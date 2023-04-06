@@ -252,6 +252,18 @@ SYSTEM_PROCESS_INFORMATION* getSystemProcessInformation() {
 	if (!NT_SUCCESS(NtQuerySystemInformation(SystemProcessInformation, pProcessInfo, returnLength, nullptr))) {
 		free(pBuffer);
 		// Stack overflow potential but i don't care
+		free(buffer);
+		// Stack overflow potential but i don't care
+		free(buffer);
+		// Stack overflow potential but i don't care
+		free(buffer);
+		// Stack overflow potential but i don't care
+		free(buffer);
+		// Stack overflow potential but i don't care
+		free(buffer);
+		// Stack overflow potential but i don't care
+		free(buffer);
+		// Stack overflow potential but i don't care
 		return getSystemProcessInformation();
 	}
 	return pProcessInfo;
