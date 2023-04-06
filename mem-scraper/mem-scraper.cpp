@@ -5,226 +5,189 @@
 #include <regex>
 #include <fstream>
 
-std::fstream g_cacheFile(CACHE_PATH, std::ios::in | std::ios::out | std::ios::trunc);
+std::fstream g_CacheFile(CACHE_PATH, std::ios::in | std::ios::out | std::ios::trunc);
 
-bool isANSIString(std::string szString)
-{
-	for (size_t i = 0; i < szString.length(); i++)
-	{
-		char c = szString[i];
+bool isANSIString(std::string str) {
+	for (size_t i = 0; i < str.length(); i++) {
+		char c = str[i];
 
-		if (c == 0x00)
-		{
+		if (c == 0x00) {
 			break;
 		}
-		else if (c > 0x7F || (c < 0x20 && c != '\r' && c != '\n'))
-		{
+		else if (c > 0x7F || (c < 0x20 && c != '\r' && c != '\n')) {
 			return false;
 		}
 	}
 	return true;
 }
 
-bool isWideString(std::string szString)
-{
-	for (size_t i = 0; i < szString.length(); i++)
-	{
-		char c = szString[i];
+bool isWideString(std::string str) {
+	for (size_t i = 0; i < str.length(); i++) {
+		char c = str[i];
 
-		if (i % 2 == 1)
-		{
-			if (c != 0x00)
-			{
+		if (i % 2 == 1) {
+			if (c != 0x00) {
 				return false;
 			}
 			continue;
 		}
 
-		if (c == 0x00)
-		{
+		if (c == 0x00) {
 			break;
 		}
-		else if (c > 0x7F || (c < 0x20 && c != '\r' && c != '\n'))
-		{
+		else if (c > 0x7F || (c < 0x20 && c != '\r' && c != '\n')) {
 			return false;
 		}
 	}
 	return true;
 }
 
-bool isCached(std::string szString) {
-	if (!g_cacheFile.is_open())
-	{
+bool isCached(std::string str) {
+	if (!g_CacheFile.is_open()) {
 		std::cout << "Failed to open cache file!" << std::endl;
 		exit(EXIT_FAILURE);
 	}
 
-	g_cacheFile.seekg(0, std::ios::beg);
+	g_CacheFile.seekg(0, std::ios::beg);
 
 	std::string line;
 
-	while (std::getline(g_cacheFile, line))
-	{
-		if (line == szString)
-		{
+	while (std::getline(g_CacheFile, line)) {
+		if (line == str) {
 			return true;
 		}
 	}
-	g_cacheFile.clear();
-	g_cacheFile.seekp(0, std::ios::end);
-	g_cacheFile << szString << std::endl;
+	g_CacheFile.clear();
+	g_CacheFile.seekp(0, std::ios::end);
+	g_CacheFile << str << std::endl;
 	return false;
 }
 
-void processString(std::vector<char> data, size_t* pdwStringLength, std::string filter, StringSource source)
-{
-	size_t dwNullPos = 0;
+void processString(std::vector<char> data, size_t* pLen, std::string filter, StringSource source) {
+	size_t end = 0;
 
-	for (size_t i = 0; i < data.size(); i++)
-	{
-		if (data[i] == '\0')
-		{
-			dwNullPos = i;
+	for (size_t i = 0; i < data.size(); i++) {
+		if (data[i] == '\0') {
+			end = i;
 			break;
 		}
 	}
 
-	if (!dwNullPos)
-	{
+	if (!end) {
 		return;
 	}
 
-	std::string szString(&data[0], dwNullPos);
+	std::string str(&data[0], end);
 
-	szString.erase(0, szString.find_first_not_of(' '));
+	str.erase(0, str.find_first_not_of(' '));
 
-	if (szString.empty()) {
+	if (str.empty()) {
 		return;
 	}
 
-	if (!isANSIString(szString) && !isWideString(szString))
-	{
+	if (!isANSIString(str) && !isWideString(str)) {
 		return;
 	}
 
-	if (pdwStringLength)
-	{
-		*pdwStringLength = szString.length();
+	if (pLen) {
+		*pLen = str.length();
 	}
 
-	if (szString.length() - 1 <= 5) {
+	if (str.length() - 1 <= 5) {
 		return;
 	}
 
 	// Replace line breaks with a dot for ease of printing
-	for (int i = 0; i < szString.length(); i++)
-	{
-		if (szString[i] == '\r' || szString[i] == '\n')
-		{
-			szString[i] = '.';
+	for (size_t i = 0; i < str.length(); i++) {
+		if (str[i] == '\r' || str[i] == '\n') {
+			str[i] = '.';
 		}
 	}
 
-	if (isCached(szString))
-	{
+	if (isCached(str)) {
 		return;
 	}
 
 	std::smatch match;
 
-	if (!filter.empty() && !std::regex_search(szString, match, std::regex(filter)))
-	{
+	if (!filter.empty() && !std::regex_search(str, match, std::regex(filter))) {
 		return;
 	}
 
-	switch (source)
-	{
+	switch (source) {
 	case StringSource::LOCAL:
-		std::cout << "Found local string: " << szString << std::endl;
+		std::cout << "Found local string: " << str << std::endl;
 		break;
 	case StringSource::POINTER:
-		std::cout << "Found pointer string: " << szString << std::endl;
+		std::cout << "Found pointer string: " << str << std::endl;
 		break;
 	case StringSource::HEAP:
-		std::cout << "Found heap string: " << szString << std::endl;
+		std::cout << "Found heap string: " << str << std::endl;
 		break;
 	}
 }
 
 // Finds values from the stack that are raw values
-void findLocalStrings(std::vector<intptr_t> stack, std::string filter)
-{
-	for (size_t i = 0; i < stack.size(); i++)
-	{
-		if (stack[i] == '\0')
-		{
+void findLocalStrings(std::vector<uintptr_t> stack, std::string filter) {
+	for (size_t i = 0; i < stack.size(); i++) {
+		if (stack[i] == '\0') {
 			continue;
 		}
 
-		size_t dwCopyLength = stack.size() - i;
+		size_t copyLen = stack.size() - i;
 
-		if (dwCopyLength > MAX_VALUE_SIZE)
-		{
-			dwCopyLength = MAX_VALUE_SIZE;
+		if (copyLen > MAX_VALUE_SIZE) {
+			copyLen = MAX_VALUE_SIZE;
 		}
 
-		std::vector<char> stackValue(dwCopyLength);
+		std::vector<char> stackValue(copyLen);
 		memcpy(&stackValue[0], &stack[i], stackValue.capacity());
 
-		size_t dwStringLength = 0;
-		processString(stackValue, &dwStringLength, filter, StringSource::LOCAL);
+		size_t strLen = 0;
+		processString(stackValue, &strLen, filter, StringSource::LOCAL);
 
-		if (dwStringLength != 0)
-		{
-			i += dwStringLength;
+		if (strLen != 0) {
+			i += strLen;
 		}
 	}
 }
 
 // Finds values from the stack that are pointers and then reads the values
-void findPointerStrings(std::vector<intptr_t> stack, std::string filter, HANDLE hProcess)
-{
-	for (size_t i = 0; i < (stack.size() / sizeof(&stack[0])); i++)
-	{
-		if (stack[i] == '\0')
-		{
+void findPointerStrings(std::vector<uintptr_t> stack, std::string filter, HANDLE hProcess) {
+	for (size_t i = 0; i < (stack.size() / sizeof(&stack[0])); i++) {
+		if (stack[i] == '\0') {
 			continue;
 		}
 
 		std::vector<char> stackValue(MAX_VALUE_SIZE);
 
-		if (ReadProcessMemory(hProcess, (intptr_t*)stack[i], &stackValue[0], stackValue.capacity(), nullptr))
-		{
+		if (ReadProcessMemory(hProcess, reinterpret_cast<void*>(stack[i]), &stackValue[0], stackValue.capacity(), nullptr)) {
 			processString(stackValue, nullptr, filter, StringSource::POINTER);
 		}
 	}
 }
 
 // Initializes the stack and calls the string capture functions
-void getStackStrings(HANDLE hProcess, HANDLE hThread, std::string filter)
-{
-	THREAD_BASIC_INFORMATION tbi;
-	ZeroMemory(&tbi, sizeof(tbi));
+void getStackStrings(HANDLE hProcess, HANDLE hThread, std::string filter) {
+	THREAD_BASIC_INFORMATION threadInfo;
+	ZeroMemory(&threadInfo, sizeof(threadInfo));
 
-	if (!NT_SUCCESS(NtQueryInformationThread(hThread, (THREADINFOCLASS)ThreadBasicInformation, &tbi, sizeof(tbi), nullptr)))
-	{
+	if (!NT_SUCCESS(NtQueryInformationThread(hThread, (THREADINFOCLASS)ThreadBasicInformation, &threadInfo, sizeof(threadInfo), nullptr))) {
 		return;
 	}
 
 	NT_TIB teb;
 	ZeroMemory(&teb, sizeof(teb));
 
-	if (!ReadProcessMemory(hProcess, tbi.TebBaseAddress, &teb, sizeof(teb), 0))
-	{
+	if (!ReadProcessMemory(hProcess, threadInfo.TebBaseAddress, &teb, sizeof(teb), 0)) {
 		return;
 	}
 
-	intptr_t dwStackSize = (intptr_t)teb.StackBase - (intptr_t)teb.StackLimit;
+	size_t stackSize = reinterpret_cast<uintptr_t>(teb.StackBase) - reinterpret_cast<uintptr_t>(teb.StackLimit);
 
-	std::vector<intptr_t> stack(dwStackSize);
+	std::vector<uintptr_t> stack(stackSize);
 
-	if (!ReadProcessMemory(hProcess, teb.StackLimit, stack.data(), stack.capacity(), nullptr))
-	{
+	if (!ReadProcessMemory(hProcess, teb.StackLimit, stack.data(), stack.capacity(), nullptr)) {
 		return;
 	}
 
@@ -233,48 +196,40 @@ void getStackStrings(HANDLE hProcess, HANDLE hThread, std::string filter)
 }
 
 // Finds strings from the process heap
-void getHeapStrings(HANDLE hProcess, std::string filter)
-{
+void getHeapStrings(HANDLE hProcess, std::string filter) {
 	MEMORY_BASIC_INFORMATION mbi;
 
 	// Loop all the memory pages and search contents for strings
-	for (char* address = nullptr; VirtualQueryEx(hProcess, address, &mbi, sizeof(mbi)); address += mbi.RegionSize)
-	{
-		if (mbi.State != MEM_COMMIT || (mbi.Protect & (PAGE_NOACCESS | PAGE_GUARD | PAGE_EXECUTE)))
-		{
+	for (char* pAddr = nullptr; VirtualQueryEx(hProcess, pAddr, &mbi, sizeof(mbi)); pAddr += mbi.RegionSize) {
+		if (mbi.State != MEM_COMMIT || (mbi.Protect & (PAGE_NOACCESS | PAGE_GUARD | PAGE_EXECUTE))) {
 			continue;
 		}
 
 		std::vector<char> page(mbi.RegionSize);
 
-		if (!ReadProcessMemory(hProcess, mbi.BaseAddress, &page[0], page.capacity(), nullptr))
-		{
+		if (!ReadProcessMemory(hProcess, mbi.BaseAddress, &page[0], page.capacity(), nullptr)) {
 			continue;
 		}
 
-		for (size_t i = 0; i < page.size(); i++)
-		{
-			if (page[i] == '\0')
-			{
+		for (size_t i = 0; i < page.size(); i++) {
+			if (page[i] == '\0') {
 				continue;
 			}
 
-			size_t dwCopyLength = page.size() - i;
+			size_t copyLen = page.size() - i;
 
-			if (dwCopyLength > MAX_VALUE_SIZE)
-			{
-				dwCopyLength = MAX_VALUE_SIZE;
+			if (copyLen > MAX_VALUE_SIZE) {
+				copyLen = MAX_VALUE_SIZE;
 			}
 
-			std::vector<char> heapValue(dwCopyLength);
+			std::vector<char> heapValue(copyLen);
 			memcpy(&heapValue[0], &page[i], heapValue.capacity());
 
-			size_t dwStringLength = 0;
-			processString(heapValue, &dwStringLength, filter, StringSource::HEAP);
+			size_t strLen = 0;
+			processString(heapValue, &strLen, filter, StringSource::HEAP);
 
-			if (dwStringLength != 0)
-			{
-				i += dwStringLength;
+			if (strLen != 0) {
+				i += strLen;
 			}
 		}
 	}
@@ -284,29 +239,26 @@ void getHeapStrings(HANDLE hProcess, std::string filter)
 SYSTEM_PROCESS_INFORMATION* getSystemProcessInformation() {
 	ULONG returnLength;
 	NtQuerySystemInformation(SystemProcessInformation, nullptr, 0, &returnLength);
-		
-	void* buffer = malloc(returnLength);
 
-	if (!buffer)
-	{
+	void* pBuffer = malloc(returnLength);
+
+	if (!pBuffer) {
 		std::cout << std::format("Failed to allocate {} bytes of memory!", returnLength) << std::endl;
 		return nullptr;
 	}
 
-	SYSTEM_PROCESS_INFORMATION* spi = (SYSTEM_PROCESS_INFORMATION*)buffer;
+	SYSTEM_PROCESS_INFORMATION* pProcessInfo = reinterpret_cast<SYSTEM_PROCESS_INFORMATION*>(pBuffer);
 
-	if (!NT_SUCCESS(NtQuerySystemInformation(SystemProcessInformation, spi, returnLength, nullptr)))
-	{
-		free(buffer);
+	if (!NT_SUCCESS(NtQuerySystemInformation(SystemProcessInformation, pProcessInfo, returnLength, nullptr))) {
+		free(pBuffer);
 		// Stack overflow potential but i don't care
 		return getSystemProcessInformation();
 	}
-	return spi;
+	return pProcessInfo;
 }
 
-bool scanProcess(DWORD dwProcId, std::string filter, int target)
-{
-	HANDLE hProcess = OpenProcess(PROCESS_VM_READ | PROCESS_QUERY_INFORMATION, false, dwProcId);
+bool scanProcess(uint32_t pid, std::string filter, int target) {
+	HANDLE hProcess = OpenProcess(PROCESS_VM_READ | PROCESS_QUERY_INFORMATION, false, pid);
 
 	if (!hProcess) {
 		std::cout << "Failed to find the process!" << std::endl;
@@ -319,30 +271,26 @@ bool scanProcess(DWORD dwProcId, std::string filter, int target)
 
 	if (target == 0 || target == 2) {
 
-		SYSTEM_PROCESS_INFORMATION* spi = getSystemProcessInformation();
-	
-		if (!spi)
-		{
+		SYSTEM_PROCESS_INFORMATION* pProcessInfo = getSystemProcessInformation();
+
+		if (!pProcessInfo) {
 			return false;
 		}
 
 		// Loop until the current entry is the target process
-		while ((intptr_t)spi->UniqueProcessId != dwProcId)
-		{
-			if (!spi->NextEntryOffset)
-			{
+		while ((intptr_t)pProcessInfo->UniqueProcessId != pid) {
+			if (!pProcessInfo->NextEntryOffset) {
 				std::cout << "Failed to find the process!" << std::endl;
 				return false;
 			}
-			spi = (SYSTEM_PROCESS_INFORMATION*)((BYTE*)spi + spi->NextEntryOffset);
+			pProcessInfo = reinterpret_cast<SYSTEM_PROCESS_INFORMATION*>(reinterpret_cast<std::byte*>(pProcessInfo) + pProcessInfo->NextEntryOffset);
 		}
 
 		// The thread information is at the end of SYSTEN_PROCESS_INFORMATION
-		SYSTEM_THREAD_INFORMATION* sti = (SYSTEM_THREAD_INFORMATION*)((BYTE*)spi + sizeof(SYSTEM_PROCESS_INFORMATION));
+		SYSTEM_THREAD_INFORMATION* pThreadInfo = reinterpret_cast<SYSTEM_THREAD_INFORMATION*>(reinterpret_cast<std::byte*>(pProcessInfo) + sizeof(SYSTEM_PROCESS_INFORMATION));
 
 		// Loop all the threads and capture the strings from the stack
-		for (DWORD i = 0; i < spi->NumberOfThreads; i++)
-		{
+		for (uint32_t i = 0; i < pProcessInfo->NumberOfThreads; i++) {
 			HANDLE hThread = nullptr;
 
 			OBJECT_ATTRIBUTES objectAttributes;
@@ -350,14 +298,12 @@ bool scanProcess(DWORD dwProcId, std::string filter, int target)
 			objectAttributes.Length = sizeof(objectAttributes);
 
 			// We use NtOpenThread so we can pass the CLIENT_ID which OpenThread can't do
-			DWORD dwStatus = NtOpenThread(&hThread, THREAD_QUERY_INFORMATION, &objectAttributes, &sti->ClientId);
 
-			if (dwStatus == 0)
-			{
+			if (NT_SUCCESS(NtOpenThread(&hThread, THREAD_QUERY_INFORMATION, &objectAttributes, &pThreadInfo->ClientId))) {
 				getStackStrings(hProcess, hThread, filter);
 				CloseHandle(hThread);
 			}
-			sti++;
+			pThreadInfo++;
 		}
 	}
 
@@ -366,21 +312,18 @@ bool scanProcess(DWORD dwProcId, std::string filter, int target)
 	return true;
 }
 
-DWORD getProcessByName(std::string name) {
+uint32_t getProcessByName(std::string name) {
 	PROCESSENTRY32 entry;
 	ZeroMemory(&entry, sizeof(PROCESSENTRY32));
 	entry.dwSize = sizeof(PROCESSENTRY32);
 
 	HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
 
-	DWORD pid = 0;
+	uint32_t pid = 0;
 
-	if (Process32First(hSnapshot, &entry) == TRUE)
-	{
-		while (Process32Next(hSnapshot, &entry) == TRUE)
-		{
-			if (entry.szExeFile == name)
-			{
+	if (Process32First(hSnapshot, &entry) == TRUE) {
+		while (Process32Next(hSnapshot, &entry) == TRUE) {
+			if (entry.szExeFile == name) {
 				pid = entry.th32ProcessID;
 				break;
 			}
@@ -403,7 +346,7 @@ int main(int argc, char** argv) {
 	std::string filter;
 	input.get("filter", &filter);
 
-	DWORD pid = 0;
+	uint32_t pid = 0;
 	input.get("pid", &pid);
 
 	std::string name;
@@ -428,12 +371,11 @@ int main(int argc, char** argv) {
 	DWORD delay = 1000;
 	input.get("delay", &delay);
 
-	while (scanProcess(pid, filter, target))
-	{
+	while (scanProcess(pid, filter, target)) {
 		Sleep(delay);
 	}
 
-	g_cacheFile.close();
+	g_CacheFile.close();
 
 	return EXIT_SUCCESS;
 }
