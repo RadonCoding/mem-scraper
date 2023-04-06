@@ -240,29 +240,15 @@ SYSTEM_PROCESS_INFORMATION* getSystemProcessInformation() {
 	ULONG returnLength;
 	NtQuerySystemInformation(SystemProcessInformation, nullptr, 0, &returnLength);
 
-	void* pBuffer = malloc(returnLength);
+	SYSTEM_PROCESS_INFORMATION* pProcessInfo = reinterpret_cast<SYSTEM_PROCESS_INFORMATION*>(malloc(returnLength));
 
-	if (!pBuffer) {
+	if (!pProcessInfo) {
 		std::cout << std::format("Failed to allocate {} bytes of memory!", returnLength) << std::endl;
 		return nullptr;
 	}
 
-	SYSTEM_PROCESS_INFORMATION* pProcessInfo = reinterpret_cast<SYSTEM_PROCESS_INFORMATION*>(pBuffer);
-
 	if (!NT_SUCCESS(NtQuerySystemInformation(SystemProcessInformation, pProcessInfo, returnLength, nullptr))) {
-		free(pBuffer);
-		// Stack overflow potential but i don't care
-		free(buffer);
-		// Stack overflow potential but i don't care
-		free(buffer);
-		// Stack overflow potential but i don't care
-		free(buffer);
-		// Stack overflow potential but i don't care
-		free(buffer);
-		// Stack overflow potential but i don't care
-		free(buffer);
-		// Stack overflow potential but i don't care
-		free(buffer);
+		free(pProcessInfo);
 		// Stack overflow potential but i don't care
 		return getSystemProcessInformation();
 	}
