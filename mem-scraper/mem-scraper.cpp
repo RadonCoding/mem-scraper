@@ -5,7 +5,7 @@
 #include <regex>
 #include <fstream>
 
-std::fstream g_CacheFile(CACHE_PATH, std::ios::in | std::ios::out | std::ios::trunc);
+std::fstream _cacheFile(CACHE_PATH, std::ios::in | std::ios::out | std::ios::trunc);
 
 bool isANSIString(std::string str) {
 	for (size_t i = 0; i < str.length(); i++) {
@@ -43,23 +43,23 @@ bool isWideString(std::string str) {
 }
 
 bool isCached(std::string str) {
-	if (!g_CacheFile.is_open()) {
+	if (!_cacheFile.is_open()) {
 		std::cout << "Failed to open cache file!" << std::endl;
 		exit(EXIT_FAILURE);
 	}
 
-	g_CacheFile.seekg(0, std::ios::beg);
+	_cacheFile.seekg(0, std::ios::beg);
 
 	std::string line;
 
-	while (std::getline(g_CacheFile, line)) {
+	while (std::getline(_cacheFile, line)) {
 		if (line == str) {
 			return true;
 		}
 	}
-	g_CacheFile.clear();
-	g_CacheFile.seekp(0, std::ios::end);
-	g_CacheFile << str << std::endl;
+	_cacheFile.clear();
+	_cacheFile.seekp(0, std::ios::end);
+	_cacheFile << str << std::endl;
 	return false;
 }
 
@@ -73,29 +73,16 @@ void processString(std::vector<char> data, size_t* pLen, std::string filter, Str
 		}
 	}
 
-	if (!end) {
-		return;
-	}
+	if (!end) return;
 
 	std::string str(&data[0], end);
-
 	str.erase(0, str.find_first_not_of(' '));
 
-	if (str.empty()) {
-		return;
-	}
+	if (str.empty()) return;
+	if (!isANSIString(str) && !isWideString(str)) return;
+	if (pLen) *pLen = str.length();
+	if (str.length() - 1 <= 5) return;
 
-	if (!isANSIString(str) && !isWideString(str)) {
-		return;
-	}
-
-	if (pLen) {
-		*pLen = str.length();
-	}
-
-	if (str.length() - 1 <= 5) {
-		return;
-	}
 
 	// Replace line breaks with a dot for ease of printing
 	for (size_t i = 0; i < str.length(); i++) {
@@ -104,15 +91,11 @@ void processString(std::vector<char> data, size_t* pLen, std::string filter, Str
 		}
 	}
 
-	if (isCached(str)) {
-		return;
-	}
+	if (isCached(str))	return;
 
 	std::smatch match;
 
-	if (!filter.empty() && !std::regex_search(str, match, std::regex(filter))) {
-		return;
-	}
+	if (!filter.empty() && !std::regex_search(str, match, std::regex(filter)))	return;
 
 	switch (source) {
 	case StringSource::LOCAL:
@@ -130,16 +113,12 @@ void processString(std::vector<char> data, size_t* pLen, std::string filter, Str
 // Finds values from the stack that are raw values
 void findLocalStrings(std::vector<uintptr_t> stack, std::string filter) {
 	for (size_t i = 0; i < stack.size(); i++) {
-		if (stack[i] == '\0') {
-			continue;
-		}
-
+		if (stack[i] == '\0') continue;
+		
 		size_t copyLen = stack.size() - i;
 
-		if (copyLen > MAX_VALUE_SIZE) {
-			copyLen = MAX_VALUE_SIZE;
-		}
-
+		if (copyLen > MAX_VALUE_SIZE) copyLen = MAX_VALUE_SIZE;
+		
 		std::vector<char> stackValue(copyLen);
 		memcpy(&stackValue[0], &stack[i], stackValue.capacity());
 
@@ -170,14 +149,14 @@ void findPointerStrings(std::vector<uintptr_t> stack, std::string filter, HANDLE
 // Initializes the stack and calls the string capture functions
 void getStackStrings(HANDLE hProcess, HANDLE hThread, std::string filter) {
 	THREAD_BASIC_INFORMATION threadInfo;
-	ZeroMemory(&threadInfo, sizeof(threadInfo));
+	memset(&threadInfo, 0, sizeof(threadInfo));
 
-	if (!NT_SUCCESS(NtQueryInformationThread(hThread, (THREADINFOCLASS)ThreadBasicInformation, &threadInfo, sizeof(threadInfo), nullptr))) {
+	if (!NT_SUCCESS(NtQueryInformationThread(hThread, static_cast<THREADINFOCLASS>(ThreadBasicInformation), &threadInfo, sizeof(threadInfo), nullptr))) {
 		return;
 	}
 
 	NT_TIB teb;
-	ZeroMemory(&teb, sizeof(teb));
+	memset(&teb, 0, sizeof(teb));
 
 	if (!ReadProcessMemory(hProcess, threadInfo.TebBaseAddress, &teb, sizeof(teb), 0)) {
 		return;
@@ -212,25 +191,20 @@ void getHeapStrings(HANDLE hProcess, std::string filter) {
 		}
 
 		for (size_t i = 0; i < page.size(); i++) {
-			if (page[i] == '\0') {
-				continue;
-			}
+			if (page[i] == '\0') continue;
+			
 
 			size_t copyLen = page.size() - i;
 
-			if (copyLen > MAX_VALUE_SIZE) {
-				copyLen = MAX_VALUE_SIZE;
-			}
-
+			if (copyLen > MAX_VALUE_SIZE) copyLen = MAX_VALUE_SIZE;
+			
 			std::vector<char> heapValue(copyLen);
 			memcpy(&heapValue[0], &page[i], heapValue.capacity());
 
 			size_t strLen = 0;
 			processString(heapValue, &strLen, filter, StringSource::HEAP);
 
-			if (strLen != 0) {
-				i += strLen;
-			}
+			if (strLen != 0) i += strLen;	
 		}
 	}
 }
@@ -268,7 +242,6 @@ bool scanProcess(uint32_t pid, std::string filter, int target) {
 	}
 
 	if (target == 0 || target == 2) {
-
 		SYSTEM_PROCESS_INFORMATION* pProcessInfo = getSystemProcessInformation();
 
 		if (!pProcessInfo) {
@@ -276,7 +249,7 @@ bool scanProcess(uint32_t pid, std::string filter, int target) {
 		}
 
 		// Loop until the current entry is the target process
-		while ((intptr_t)pProcessInfo->UniqueProcessId != pid) {
+		while (reinterpret_cast<uintptr_t>(pProcessInfo->UniqueProcessId) != pid) {
 			if (!pProcessInfo->NextEntryOffset) {
 				std::cout << "Failed to find the process!" << std::endl;
 				return false;
@@ -292,7 +265,7 @@ bool scanProcess(uint32_t pid, std::string filter, int target) {
 			HANDLE hThread = nullptr;
 
 			OBJECT_ATTRIBUTES objectAttributes;
-			ZeroMemory(&objectAttributes, sizeof(objectAttributes));
+			memset(&objectAttributes, 0, sizeof(objectAttributes));
 			objectAttributes.Length = sizeof(objectAttributes);
 
 			// We use NtOpenThread so we can pass the CLIENT_ID which OpenThread can't do
@@ -312,24 +285,22 @@ bool scanProcess(uint32_t pid, std::string filter, int target) {
 
 uint32_t getProcessByName(std::string name) {
 	PROCESSENTRY32 entry;
-	ZeroMemory(&entry, sizeof(PROCESSENTRY32));
+	memset(&entry, 0, sizeof(PROCESSENTRY32));
 	entry.dwSize = sizeof(PROCESSENTRY32);
 
 	HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
 
 	uint32_t pid = 0;
 
-	if (Process32First(hSnapshot, &entry) == TRUE) {
-		while (Process32Next(hSnapshot, &entry) == TRUE) {
+	if (Process32First(hSnapshot, &entry)) {
+		while (Process32Next(hSnapshot, &entry)) {
 			if (entry.szExeFile == name) {
 				pid = entry.th32ProcessID;
 				break;
 			}
 		}
 	}
-
 	CloseHandle(hSnapshot);
-
 	return pid;
 }
 
@@ -354,13 +325,13 @@ int main(int argc, char** argv) {
 
 		if (!pid) {
 			std::cout << "Could not find the process!" << std::endl;
-			return EXIT_FAILURE;
+			return -1;
 		}
 	}
 
 	if (!pid) {
 		input.usage();
-		return EXIT_FAILURE;
+		return -1;
 	}
 
 	int target = 0;
@@ -372,8 +343,6 @@ int main(int argc, char** argv) {
 	while (scanProcess(pid, filter, target)) {
 		Sleep(delay);
 	}
-
-	g_CacheFile.close();
-
-	return EXIT_SUCCESS;
+	_cacheFile.close();
+	return 0;
 }
