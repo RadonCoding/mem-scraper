@@ -216,9 +216,8 @@ SYSTEM_PROCESS_INFORMATION* getSystemProcessInfo() {
 
 	if (!NT_SUCCESS(NtQuerySystemInformation(SystemProcessInformation, pProcessInfo, length, nullptr))) {
 		free(pProcessInfo);
-
-		std::cout << "Failed to get the process information!" << std::endl;
-		return nullptr;
+		std::cout << "Failed to get the process information! Trying again..." << std::endl;
+		return getSystemProcessInfo();
 	}
 	return pProcessInfo;
 }
@@ -246,12 +245,12 @@ bool scanProcess(uint32_t pid, std::string filter, int target) {
 			reinterpret_cast<uint8_t*>(pProcessInfo) + pProcessInfo->NextEntryOffset);
 
 		// Loop until the current entry is the target process
-		while (reinterpret_cast<uintptr_t>(pProcessInfo->UniqueProcessId) != pid) {
-			if (!pProcessInfo->NextEntryOffset) {
+		while (reinterpret_cast<uintptr_t>(pCurrent->UniqueProcessId) != pid) {
+			if (!pCurrent->NextEntryOffset) {
 				std::cout << "Failed to find the process!" << std::endl;
 				return false;
 			}
-			pCurrent = reinterpret_cast<SYSTEM_PROCESS_INFORMATION*>(reinterpret_cast<uint8_t*>(pProcessInfo) + pCurrent->NextEntryOffset);
+			pCurrent = reinterpret_cast<SYSTEM_PROCESS_INFORMATION*>(reinterpret_cast<uint8_t*>(pCurrent) + pCurrent->NextEntryOffset);
 		}
 
 		// The thread information is at the end of SYSTEN_PROCESS_INFORMATION
