@@ -63,7 +63,7 @@ bool isCached(std::string str) {
 	return false;
 }
 
-void processString(std::vector<char> data, size_t* pLen, std::string filter, StringSource source) {
+void processString(std::vector<char> data, size_t* len, std::string filter, StringSource source) {
 	size_t end = 0;
 
 	for (size_t i = 0; i < data.size(); i++) {
@@ -80,7 +80,7 @@ void processString(std::vector<char> data, size_t* pLen, std::string filter, Str
 
 	if (str.empty()) return;
 	if (!isANSIString(str) && !isWideString(str)) return;
-	if (pLen) *pLen = str.length();
+	if (len) *len = str.length();
 	if (str.length() - 1 <= 5) return;
 
 	// Replace line breaks with a dot for ease of printing
@@ -129,29 +129,29 @@ void findLocalStrings(std::vector<uintptr_t> stack, std::string filter) {
 }
 
 // Finds values from the stack that are pointers and then reads the values
-void findPointerStrings(std::vector<uintptr_t> stack, std::string filter, HANDLE hProcess) {
+void findPointerStrings(std::vector<uintptr_t> stack, std::string filter, HANDLE process) {
 	for (size_t i = 0; i < stack.size(); i++) {
 		std::vector<char> value(MAX_VALUE_SIZE);
 
-		if (ReadProcessMemory(hProcess, reinterpret_cast<void*>(stack[i]), &value[0], value.capacity(), nullptr)) {
+		if (ReadProcessMemory(process, reinterpret_cast<void*>(stack[i]), &value[0], value.capacity(), nullptr)) {
 			processString(value, nullptr, filter, StringSource::POINTER);
 		}
 	}
 }
 
 // Initializes the stack and calls the string capture functions
-void getStackStrings(HANDLE hProcess, HANDLE hThread, std::string filter) {
+void getStackStrings(HANDLE process, HANDLE thread, std::string filter) {
 	THREAD_BASIC_INFORMATION tbi;
 	memset(&tbi, 0, sizeof(tbi));
 
-	if (!NT_SUCCESS(NtQueryInformationThread(hThread, static_cast<THREADINFOCLASS>(ThreadBasicInformation), &tbi, sizeof(tbi), nullptr))) {
+	if (!NT_SUCCESS(NtQueryInformationThread(thread, static_cast<THREADINFOCLASS>(ThreadBasicInformation), &tbi, sizeof(tbi), nullptr))) {
 		return;
 	}
 
 	NT_TIB teb;
 	memset(&teb, 0, sizeof(teb));
 
-	if (!ReadProcessMemory(hProcess, tbi.TebBaseAddress, &teb, sizeof(teb), 0)) {
+	if (!ReadProcessMemory(process, tbi.TebBaseAddress, &teb, sizeof(teb), 0)) {
 		return;
 	}
 
@@ -159,33 +159,32 @@ void getStackStrings(HANDLE hProcess, HANDLE hThread, std::string filter) {
 
 	std::vector<uintptr_t> stack(size);
 
-	if (!ReadProcessMemory(hProcess, teb.StackLimit, &stack[0], stack.capacity(), nullptr)) {
+	if (!ReadProcessMemory(process, teb.StackLimit, &stack[0], stack.capacity(), nullptr)) {
 		return;
 	}
 
-	findPointerStrings(stack, filter, hProcess);
+	findPointerStrings(stack, filter, process);
 	findLocalStrings(stack, filter);
 }
 
 // Finds strings from the process heap
-void getHeapStrings(HANDLE hProcess, std::string filter) {
+void getHeapStrings(HANDLE process, std::string filter) {
 	MEMORY_BASIC_INFORMATION mbi;
 
 	// Loop all the memory pages and search contents for strings
-	for (char* pAddr = nullptr; VirtualQueryEx(hProcess, pAddr, &mbi, sizeof(mbi)); pAddr += mbi.RegionSize) {
+	for (uint8_t* addr = nullptr; VirtualQueryEx(process, addr, &mbi, sizeof(mbi)); addr += mbi.RegionSize) {
 		if (mbi.State != MEM_COMMIT || (mbi.Protect & (PAGE_NOACCESS | PAGE_GUARD | PAGE_EXECUTE))) {
 			continue;
 		}
 
 		std::vector<char> page(mbi.RegionSize);
 
-		if (!ReadProcessMemory(hProcess, mbi.BaseAddress, &page[0], page.capacity(), nullptr)) {
+		if (!ReadProcessMemory(process, mbi.BaseAddress, &page[0], page.capacity(), nullptr)) {
 			continue;
 		}
 
 		for (size_t i = 0; i < page.size(); i++) {
 			if (page[i] == '\0') continue;
-			
 
 			size_t copyLen = page.size() - i;
 
@@ -203,79 +202,79 @@ void getHeapStrings(HANDLE hProcess, std::string filter) {
 }
 
 // Gets the system information for all processes in the system
-SYSTEM_PROCESS_INFORMATION* getSystemProcessInfo() {
+SYSTEM_PROCESS_INFORMATION* getProcessInfo() {
 	ULONG length;
 	NtQuerySystemInformation(SystemProcessInformation, nullptr, 0, &length);
 
-	SYSTEM_PROCESS_INFORMATION* pProcessInfo = reinterpret_cast<SYSTEM_PROCESS_INFORMATION*>(malloc(length));
+	SYSTEM_PROCESS_INFORMATION* spi = reinterpret_cast<SYSTEM_PROCESS_INFORMATION*>(malloc(length));
 
-	if (!pProcessInfo) {
+	if (!spi) {
 		std::cout << std::format("Failed to allocate {} bytes of memory!", length) << std::endl;
 		return nullptr;
 	}
 
-	if (!NT_SUCCESS(NtQuerySystemInformation(SystemProcessInformation, pProcessInfo, length, nullptr))) {
-		free(pProcessInfo);
+	if (!NT_SUCCESS(NtQuerySystemInformation(SystemProcessInformation, spi, length, nullptr))) {
+		free(spi);
 		std::cout << "Failed to get the process information! Trying again..." << std::endl;
-		return getSystemProcessInfo();
+		return getProcessInfo();
 	}
-	return pProcessInfo;
+	return spi;
 }
 
 bool scanProcess(uint32_t pid, std::string filter, int target) {
-	HANDLE hProcess = OpenProcess(PROCESS_VM_READ | PROCESS_QUERY_INFORMATION, false, pid);
+	HANDLE process = OpenProcess(PROCESS_VM_READ | PROCESS_QUERY_INFORMATION, false, pid);
 
-	if (!hProcess) {
+	if (!process) {
 		std::cout << "Failed to find the process!" << std::endl;
 		return false;
 	}
 
 	if (target == 0 || target == 1) {
-		getHeapStrings(hProcess, filter);
+		getHeapStrings(process, filter);
 	}
 
 	if (target == 0 || target == 2) {
-		SYSTEM_PROCESS_INFORMATION* pProcessInfo = getSystemProcessInfo();
+		SYSTEM_PROCESS_INFORMATION* spi = getProcessInfo();
 
-		if (!pProcessInfo) {
+		if (!spi) {
 			return false;
 		}
 
-		SYSTEM_PROCESS_INFORMATION* pCurrent = reinterpret_cast<SYSTEM_PROCESS_INFORMATION*>(
-			reinterpret_cast<uint8_t*>(pProcessInfo) + pProcessInfo->NextEntryOffset);
+		SYSTEM_PROCESS_INFORMATION* current = reinterpret_cast<SYSTEM_PROCESS_INFORMATION*>(
+			reinterpret_cast<uint8_t*>(spi) + spi->NextEntryOffset);
 
 		// Loop until the current entry is the target process
-		while (reinterpret_cast<uintptr_t>(pCurrent->UniqueProcessId) != pid) {
-			if (!pCurrent->NextEntryOffset) {
+		while (reinterpret_cast<uintptr_t>(current->UniqueProcessId) != pid) {
+			if (!current->NextEntryOffset) {
 				std::cout << "Failed to find the process!" << std::endl;
 				return false;
 			}
-			pCurrent = reinterpret_cast<SYSTEM_PROCESS_INFORMATION*>(reinterpret_cast<uint8_t*>(pCurrent) + pCurrent->NextEntryOffset);
+			current = reinterpret_cast<SYSTEM_PROCESS_INFORMATION*>(reinterpret_cast<uint8_t*>(current) + current->NextEntryOffset);
 		}
 
 		// The thread information is at the end of SYSTEN_PROCESS_INFORMATION
-		SYSTEM_THREAD_INFORMATION* pThreadInfo = reinterpret_cast<SYSTEM_THREAD_INFORMATION*>(reinterpret_cast<uint8_t*>(pCurrent) + sizeof(SYSTEM_PROCESS_INFORMATION));
+		SYSTEM_THREAD_INFORMATION* sti = reinterpret_cast<SYSTEM_THREAD_INFORMATION*>(reinterpret_cast<uint8_t*>(current) + sizeof(SYSTEM_PROCESS_INFORMATION));
 
 		// Loop all the threads and capture the strings from the stack
-		for (uint32_t i = 0; i < pCurrent->NumberOfThreads; i++) {
-			HANDLE hThread = nullptr;
+		for (uint32_t i = 0; i < current->NumberOfThreads; i++) {
+			HANDLE thread = nullptr;
 
-			OBJECT_ATTRIBUTES objectAttributes;
-			memset(&objectAttributes, 0, sizeof(objectAttributes));
-			objectAttributes.Length = sizeof(objectAttributes);
+			OBJECT_ATTRIBUTES attr;
+			memset(&attr, 0, sizeof(attr));
+			attr.Length = sizeof(attr);
 
 			// We use NtOpenThread so we can pass the CLIENT_ID which OpenThread can't do
 
-			if (NT_SUCCESS(NtOpenThread(&hThread, THREAD_QUERY_INFORMATION, &objectAttributes, &pThreadInfo->ClientId))) {
-				getStackStrings(hProcess, hThread, filter);
-				CloseHandle(hThread);
+			if (NT_SUCCESS(NtOpenThread(&thread, THREAD_QUERY_INFORMATION, &attr, &sti->ClientId))) {
+				getStackStrings(process, thread, filter);
+				CloseHandle(thread);
 			}
-			pThreadInfo++;
+			sti++;
 		}
-		free(pProcessInfo);
+		free(spi);
 	}
 
-	CloseHandle(hProcess);
+	CloseHandle(process);
 
 	return true;
 }
